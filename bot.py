@@ -9,51 +9,52 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# Данные для расчета
-DEVICE_PRICE = 5000  # Цена S21 (можно менять)
-DAILY_REVENUE_USD = 18.2  # Примерный доход S21 (200 TH) при текущем курсе и сложности
-MONTHLY_REVENUE = DAILY_REVENUE_USD * 30.5
-
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["🚀 Расчет окупаемости S21", "📅 Годовой баланс СЭС", "☀️ Сезонные отчеты"]
-    keyboard.add(*buttons)
-    await message.answer(f"Алексей, порядок наведен! Теперь бот считает окупаемость с учетом Net Billing для Боярки (оя).", reply_markup=keyboard)
+    # Делаем кнопки четкими и понятными
+    keyboard.add("📊 Сезонные отчеты")
+    keyboard.add("🚀 Расчет окупаемости S21")
+    keyboard.add("📅 Годовой баланс СЭС")
+    await message.answer(f"Алексей, порядок наведен! Теперь все кнопки в Боярке (оя) работают.", reply_markup=keyboard)
 
-@dp.message_handler(lambda message: message.text == "🚀 Расчет окупаемости S21")
-async def calculate_roi(message: types.Message):
-    # При 30 кВт СЭС затраты на электричество перекрываются генерацией (Net Billing)
-    # Поэтому считаем чистый доход без вычета за свет
-    roi_days = DEVICE_PRICE / DAILY_REVENUE_USD
-    roi_months = roi_days / 30.5
-    
+# Этот фильтр поймает кнопку, даже если там будет другой смайлик
+@dp.message_handler(lambda message: "Сезонные отчеты" in message.text)
+async def seasonal_report(message: types.Message):
     text = (
-        f"💎 **Окупаемость S21 (СЭС 30 кВт + Net Billing):**\n\n"
-        f"💰 Стоимость аппарата: ${DEVICE_PRICE}\n"
-        f"🔌 Цена за свет: 0.00 грн (перекрыто солнцем)\n"
-        f"💵 Доход в месяц: ~${round(MONTHLY_REVENUE, 2)}\n"
-        f"--- \n"
-        f"⏳ Срок окупаемости: **{round(roi_days)} дней**\n"
-        f"📊 В месяцах: **~{round(roi_months, 1)} мес.**\n\n"
-        f"⚠️ *Для сравнения: на обычном тарифе (4.32 грн) срок составил бы ~20 месяцев.*"
+        f"📊 **Сезонные отчеты (СЭС 30 кВт + Net Billing):**\n\n"
+        f"☀️ **Лето:** Генерация ~3800 кВт*ч/мес.\n"
+        f"💰 В копилку Net Billing: +1280 кВт*ч.\n\n"
+        f"🍂 **Осень/Весна:** Генерация ~1800 кВт*ч/мес.\n"
+        f"🔌 Берем из накоплений: -720 кВт*ч.\n\n"
+        f"❄️ **Зима:** Генерация ~450 кВт*ч/мес.\n"
+        f"⚠️ Тратим летний депозит: -2070 кВт*ч."
     )
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text)
 
-@dp.message_handler(lambda message: message.text == "📅 Годовой баланс СЭС")
-async def yearly_total(message: types.Message):
-    # Данные для СЭС 30 кВт в Киевской обл.
-    gen_year = 32000
-    cons_year = 3.5 * 24 * 365 # Потребление одного S21 в год
-    surplus = gen_year - cons_year
-    
+@dp.message_handler(lambda message: "Расчет окупаемости" in message.text)
+async def calculate_roi(message: types.Message):
+    # Твой расчет: $5000 / $18.2 в день (без учета света)
+    days = 275 
     text = (
-        f"📅 **Годовой баланс (Боярка/оя):**\n\n"
-        f"🌞 Генерация СЭС 30 кВт: {gen_year} кВт*ч\n"
-        f"⚡ Расход S21: {round(cons_year)} кВт*ч\n"
+        f"🚀 **Окупаемость S21 (Максимальная эффективность):**\n\n"
+        f"💰 Стоимость: $5000\n"
+        f"⚡ Свет: 0.00 грн (СЭС перекрывает годовой расход)\n"
         f"--- \n"
-        f"📈 Излишек для дома: **+{round(surplus)} кВт*ч**\n"
-        f"Этого излишка хватит на 2-3 кондиционера и весь свет в доме!"
+        f"⏳ Срок окупаемости: **{days} дней** (~9.0 мес.)\n\n"
+        f"Чистый профит: майнер работает только на твой карман!"
+    )
+    await message.answer(text)
+
+@dp.message_handler(lambda message: "Годовой баланс" in message.text)
+async def yearly_total(message: types.Message):
+    text = (
+        f"📅 **Годовой итог (Боярка/оя):**\n"
+        f"🌞 Генерация СЭС: 32 000 кВт*ч\n"
+        f"⚡ Расход S21: 30 660 кВт*ч\n"
+        f"--- \n"
+        f"🏆 Остаток на дом: **+1340 кВт*ч**\n"
+        f"Система полностью автономна по балансу!"
     )
     await message.answer(text)
 
