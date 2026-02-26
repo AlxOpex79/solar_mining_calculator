@@ -3,66 +3,59 @@ import os
 from aiogram import Bot, Dispatcher, types
 from aiogram.utils import executor
 
-# Настройки логирования
 logging.basicConfig(level=logging.INFO)
 
-# Инициализация бота
 API_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# --- ИСХОДНЫЕ ДАННЫЕ ---
-DEVICE_PRICE = 5000       # Стоимость S21 в $
-MINER_KW = 3.5            # Потребление S21 в кВт/час
-MONTHLY_CONS = 2520       # Расход S21 в месяц (3.5 * 24 * 30)
-DAILY_BTC = 0.00038       # Добыча BTC в сутки на 200 TH/s (актуально на 2026)
-BTC_PRICE = 85000         # Прогнозный курс BTC для расчета
+# Данные для Боярки (оя)
+DEVICE_PRICE = 5000
+DAILY_BTC = 0.00038
+BTC_PRICE = 85000
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-    buttons = [
-        "📊 Сезонный отчет (Разница кВт)",
-        "🚀 Окупаемость S21 + Добыча BTC",
-        "📅 Годовой баланс СЭС"
-    ]
-    keyboard.add(*buttons)
-    await message.answer(
-        f"Алексей, система настроена под СЭС 30 кВт в Боярке (оя).\n"
-        f"Все расчеты приведены к общему порядку Net Billing.",
-        reply_markup=keyboard
-    )
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+    kb.add("📊 Сезонный отчет (кВт)", "🚀 Окупаемость S21 + BTC", "📅 Годовой баланс СЭС")
+    await message.answer("Алексей, система обновлена и готова!", reply_markup=kb)
 
-@dp.message_handler(lambda message: "Сезонный отчет" in message.text)
-async def seasonal_report(message: types.Message):
-    # Логика: Генерация - Потребление (2520 кВт*ч)
+@dp.message_handler(lambda m: "Сезонный отчет" in m.text)
+async def seasonal(message: types.Message):
     text = (
-        f"📊 **Баланс по сезонам (кВт⋅ч):**\n\n"
-        f"☀️ **ЛЕТО:**\n"
-        f"Генерация: ~3800 | Расход: 2520\n"
-        f"➕ Разница: **+1280 кВт⋅ч/мес** (в копилку)\n\n"
-        f"🍂 **ОСЕНЬ/ВЕСНА:**\n"
-        f"Генерация: ~1800 | Расход: 2520\n"
-        f"➖ Разница: **-720 кВт⋅ч/мес** (из копилки)\n\n"
-        f"❄️ **ЗИМА:**\n"
-        f"Генерация: ~450 | Расход: 2520\n"
-        f"➖ Разница: **-2070 кВт⋅ч/мес** (из копилки)\n\n"
-        f"💡 *Благодаря Net Billing зимний дефицит гасится летним избытком.*"
+        "📊 **Баланс кВт⋅ч (СЭС 30 кВт vs S21):**\n\n"
+        "☀️ Лето: **+1280** кВт⋅ч/мес (в копилку)\n"
+        "🍂 Осень/Весна: **-720** кВт⋅ч/мес (из копилки)\n"
+        "❄️ Зима: **-2070** кВт⋅ч/мес (тратим накопленное)\n\n"
+        "Годовой баланс в Боярке (оя) остается положительным!"
     )
-    await message.answer(text)
+    await message.answer(text, parse_mode="Markdown")
 
-@dp.message_handler(lambda message: "Окупаемость S21" in message.text)
-async def calculate_roi(message: types.Message):
-    monthly_btc = DAILY_BTC * 30.5
+@dp.message_handler(lambda m: "Окупаемость S21" in m.text)
+async def roi(message: types.Message):
     yearly_btc = DAILY_BTC * 365
     yearly_usd = yearly_btc * BTC_PRICE
-    
-    # При СЭС 30 кВт затраты на свет = 0
     roi_days = DEVICE_PRICE / (DAILY_BTC * BTC_PRICE)
     
     text = (
-        f"🚀 **Расчет окупаемости S21:**\n\n"
-        f"💰 **Добыча биткоина:**\n"
-        f"• В месяц: ₿{round(monthly_btc, 5)}\n"
-        f"• В год: **₿{round(yearly_btc, 5)}**\n\n"
-        f"💵 **Финансо
+        f"🚀 **Результаты за год:**\n\n"
+        f"₿ Накопишь: **{round(yearly_btc, 5)} BTC**\n"
+        f"💵 В долларах: ${round(yearly_usd)}\n"
+        f"🔌 Свет: 0.00 грн (Net Billing)\n"
+        f"--- \n"
+        f"⏳ Окупаемость: **{round(roi_days)} дней**"
+    )
+    await message.answer(text, parse_mode="Markdown")
+
+@dp.message_handler(lambda m: "Годовой баланс" in m.text)
+async def yearly(message: types.Message):
+    text = (
+        "📅 **Итог года:**\n"
+        "🌞 СЭС выдаст: 32 000 кВт⋅ч\n"
+        "⚡ S21 съест: 30 660 кВт⋅ч\n"
+        f"🏆 Остаток: **+1340 кВт⋅ч** для дома!"
+    )
+    await message.answer(text)
+
+if __name__ == '__main__':
+    executor.start_polling(dp, skip_updates=True)
