@@ -1,2 +1,2 @@
-aoigram
+aiogram
 requests
