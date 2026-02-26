@@ -9,58 +9,51 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# Константы для Боярки (оя)
-SOLAR_CAPACITY = 30  # кВт
-MINER_CONSUMPTION_MONTH = 2520  # кВт*ч в месяц (S21 ~3.5 кВт * 24 * 30)
+# Данные для расчета
+DEVICE_PRICE = 5000  # Цена S21 (можно менять)
+DAILY_REVENUE_USD = 18.2  # Примерный доход S21 (200 TH) при текущем курсе и сложности
+MONTHLY_REVENUE = DAILY_REVENUE_USD * 30.5
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["☀️ Лето", "🍂 Осень/Весна", "❄️ Зима", "📅 Отчет за год"]
+    buttons = ["🚀 Расчет окупаемости S21", "📅 Годовой баланс СЭС", "☀️ Сезонные отчеты"]
     keyboard.add(*buttons)
-    await message.answer(f"Алексей, выберите период для анализа СЭС 30 кВт и Net Billing:", reply_markup=keyboard)
+    await message.answer(f"Алексей, порядок наведен! Теперь бот считает окупаемость с учетом Net Billing для Боярки (оя).", reply_markup=keyboard)
 
-@dp.message_handler(lambda message: message.text == "☀️ Лето")
-async def summer_stats(message: types.Message):
-    gen = 3800 # Средняя генерация в июне
-    balance = gen - MINER_CONSUMPTION_MONTH
-    text = (
-        f"☀️ **ЛЕТО (Июнь-Август):**\n"
-        f"📊 Генерация: {gen} кВт*ч\n"
-        f"⚡ Потребление S21: {MINER_CONSUMPTION_MONTH} кВт*ч\n"
-        f"--- \n"
-        f"💰 **В копилку Net Billing: +{balance} кВт*ч**\n"
-        f"Счет за свет: 0 грн. Ты работаешь в плюс!"
-    )
-    await message.answer(text)
-
-@dp.message_handler(lambda message: message.text == "❄️ Зима")
-async def winter_stats(message: types.Message):
-    gen = 450 # Средняя генерация в декабре
-    deficit = MINER_CONSUMPTION_MONTH - gen
-    text = (
-        f"❄️ **ЗИМА (Декабрь-Февраль):**\n"
-        f"📊 Генерация: {gen} кВт*ч\n"
-        f"⚡ Потребление S21: {MINER_CONSUMPTION_MONTH} кВт*ч\n"
-        f"--- \n"
-        f"📉 **Дефицит: -{deficit} кВт*ч**\n"
-        f"Покрывается за счет летних накоплений в Net Billing."
-    )
-    await message.answer(text)
-
-@dp.message_handler(lambda message: message.text == "📅 Отчет за год")
-async def yearly_report(message: types.Message):
-    annual_gen = 32000 # Пример для 30 кВт в нашем регионе
-    annual_cons = MINER_CONSUMPTION_MONTH * 12
-    final_balance = annual_gen - annual_cons
+@dp.message_handler(lambda message: message.text == "🚀 Расчет окупаемости S21")
+async def calculate_roi(message: types.Message):
+    # При 30 кВт СЭС затраты на электричество перекрываются генерацией (Net Billing)
+    # Поэтому считаем чистый доход без вычета за свет
+    roi_days = DEVICE_PRICE / DAILY_REVENUE_USD
+    roi_months = roi_days / 30.5
     
     text = (
-        f"📅 **ГОДОВОЙ ПРОГНОЗ (Боярка/оя):**\n"
-        f"🌞 Всего генерации: {annual_gen} кВт*ч\n"
-        f"🔌 Всего расход S21: {annual_cons} кВт*ч\n"
+        f"💎 **Окупаемость S21 (СЭС 30 кВт + Net Billing):**\n\n"
+        f"💰 Стоимость аппарата: ${DEVICE_PRICE}\n"
+        f"🔌 Цена за свет: 0.00 грн (перекрыто солнцем)\n"
+        f"💵 Доход в месяц: ~${round(MONTHLY_REVENUE, 2)}\n"
         f"--- \n"
-        f"🏆 **Итог года: {final_balance} кВт*ч в вашу пользу!**\n\n"
-        f"Вы полностью перекрываете майнинг солнцем и еще остается на дом."
+        f"⏳ Срок окупаемости: **{round(roi_days)} дней**\n"
+        f"📊 В месяцах: **~{round(roi_months, 1)} мес.**\n\n"
+        f"⚠️ *Для сравнения: на обычном тарифе (4.32 грн) срок составил бы ~20 месяцев.*"
+    )
+    await message.answer(text, parse_mode="Markdown")
+
+@dp.message_handler(lambda message: message.text == "📅 Годовой баланс СЭС")
+async def yearly_total(message: types.Message):
+    # Данные для СЭС 30 кВт в Киевской обл.
+    gen_year = 32000
+    cons_year = 3.5 * 24 * 365 # Потребление одного S21 в год
+    surplus = gen_year - cons_year
+    
+    text = (
+        f"📅 **Годовой баланс (Боярка/оя):**\n\n"
+        f"🌞 Генерация СЭС 30 кВт: {gen_year} кВт*ч\n"
+        f"⚡ Расход S21: {round(cons_year)} кВт*ч\n"
+        f"--- \n"
+        f"📈 Излишек для дома: **+{round(surplus)} кВт*ч**\n"
+        f"Этого излишка хватит на 2-3 кондиционера и весь свет в доме!"
     )
     await message.answer(text)
 
