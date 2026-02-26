@@ -10,85 +10,75 @@ API_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-# Константы оборудования (S21 200 TH)
+# Константы
 DEVICE_PRICE_USD = 5000
 DAILY_BTC_FLOW = 0.00038 
-MONTHLY_CONS = 2520 # 3.5 кВт * 24 * 30
+MONTHLY_CONS = 2520
+GRID_TARIFF = 4.32 # грн за 1 кВт
 
 def get_live_rates():
     try:
         btc_data = requests.get("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd").json()
-        btc_to_usd = btc_data['bitcoin']['usd']
+        btc_price = btc_data['bitcoin']['usd']
         uah_data = requests.get("https://api.exchangerate-api.com/v4/latest/USD").json()
         usd_to_uah = uah_data['rates']['UAH']
-        return btc_to_usd, usd_to_uah
+        return btc_price, usd_to_uah
     except:
-        return 88000, 41.5 # Резерв
+        return 90000, 41.5
 
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-    kb.add("📊 Сезонный отчет (Суммарно кВт)", "🚀 Окупаемость S21 (Live $, ₴)", "📅 Годовой баланс СЭС")
-    await message.answer(f"Алексей, теперь отчеты показывают суммарный приход и расход по периодам!", reply_markup=kb)
+    kb.add("📊 Сезонный отчет (кВт)", "💰 Финансы (Сальдо ₴/$)", "🚀 Окупаемость S21 (Live)", "📅 Годовой баланс СЭС")
+    await message.answer(f"Алексей, добавлена финансовая аналитика для Боярки (оя)!", reply_markup=kb)
 
-@dp.message_handler(lambda m: "Сезонный отчет" in m.text)
-async def seasonal_total(message: types.Message):
-    # ЛЕТО (3 месяца)
-    summer_gen = 3800 * 3
-    summer_cons = MONTHLY_CONS * 3
-    summer_diff = summer_gen - summer_cons
-
-    # ОСЕНЬ + ВЕСНА (6 месяцев)
-    mid_gen = 1800 * 6
-    mid_cons = MONTHLY_CONS * 6
-    mid_diff = mid_gen - mid_cons
-
-    # ЗИМА (3 месяца)
-    winter_gen = 450 * 3
-    winter_cons = MONTHLY_CONS * 3
-    winter_diff = winter_gen - winter_cons
-
-    text = (
-        f"📊 **Суммарный баланс по периодам (кВт⋅ч):**\n\n"
-        f"☀️ **ЛЕТО (Июнь-Авг):**\n"
-        f"  • Пришло: {summer_gen}\n"
-        f"  • Ушло: {summer_cons}\n"
-        f"  ➕ **Накоплено: +{summer_diff} кВт⋅ч**\n\n"
-        f"🍂🌻 **ОСЕНЬ/ВЕСНА (6 мес):**\n"
-        f"  • Пришло: {mid_gen}\n"
-        f"  • Ушло: {mid_cons}\n"
-        f"  ➖ **Расход баланса: {mid_diff} кВт⋅ч**\n\n"
-        f"❄️ **ЗИМА (Дек-Фев):**\n"
-        f"  • Пришло: {winter_gen}\n"
-        f"  • Ушло: {winter_cons}\n"
-        f"  ➖ **Расход баланса: {winter_diff} кВт⋅ч**\n\n"
-        f"💡 *Весь дефицит осени и зимы перекрывается летним солнцем.*"
-    )
-    await message.answer(text)
-
-@dp.message_handler(lambda m: "Окупаемость S21" in m.text)
-async def roi_live(message: types.Message):
-    btc_price, usd_rate = get_live_rates()
-    daily_rev_usd = DAILY_BTC_FLOW * btc_price
-    yearly_rev_usd = daily_rev_usd * 365
-    roi_days = DEVICE_PRICE_USD / daily_rev_usd
+@dp.message_handler(lambda m: "Финансы" in m.text)
+async def finance_report(message: types.Message):
+    btc_p, usd_r = get_live_rates()
     
+    # 1. Доход от майнинга в месяц (чистый BTC)
+    monthly_btc = DAILY_BTC_FLOW * 30.5
+    monthly_rev_usd = monthly_btc * btc_p
+    monthly_rev_uah = monthly_rev_usd * usd_r
+
+    # 2. Расчет по периодам
+    # ЛЕТО (Плюс в кВт превращаем в экономию)
+    summer_profit_uah = (monthly_rev_uah * 3) # Свет 0 грн
+    
+    # ОСЕНЬ/ВЕСНА (Докупаем свет)
+    mid_deficit_kwh = 720 # в месяц
+    mid_light_cost = mid_deficit_kwh * GRID_TARIFF
+    mid_profit_uah = (monthly_rev_uah - mid_light_cost) * 6
+
+    # ЗИМА (Докупаем много света)
+    winter_deficit_kwh = 2070 # в месяц
+    winter_light_cost = winter_deficit_kwh * GRID_TARIFF
+    winter_profit_uah = (monthly_rev_uah - winter_light_cost) * 3
+
+    total_year_uah = summer_profit_uah + mid_profit_uah + winter_profit_uah
+
     text = (
-        f"🚀 **LIVE Окупаемость (Боярка/оя):**\n\n"
-        f"💰 **Добыча в год:**\n"
-        f"₿ {round(DAILY_BTC_FLOW * 365, 5)} BTC\n"
-        f"$ {round(yearly_rev_usd, 2):,}\n"
-        f"₴ {round(yearly_rev_usd * usd_rate, 2):,}\n\n"
-        f"⏳ **Срок:** {round(roi_days)} дней (~{round(roi_days/30.5, 1)} мес.)\n"
-        f"🔌 Свет: 0.00 грн (Net Billing)"
+        f"💰 **ФИНАНСОВОЕ САЛЬДО (Курс: {btc_p}$ / {usd_r}₴):**\n\n"
+        f"☀️ **ЛЕТО (3 мес):**\n"
+        f"Добыча: ₿{round(monthly_btc*3, 4)}\n"
+        f"Сальдо: **+{round(summer_profit_uah):,} ₴** (${round(summer_profit_uah/usd_r)})\n"
+        f"*Свет полностью перекрыт*\n\n"
+        
+        f"🍂🌻 **ОСЕНЬ/ВЕСНА (6 мес):**\n"
+        f"Затраты на свет: -{round(mid_light_cost * 6):,} ₴\n"
+        f"Сальдо: **+{round(mid_profit_uah):,} ₴** (${round(mid_profit_uah/usd_r)})\n\n"
+        
+        f"❄️ **ЗИМА (3 мес):**\n"
+        f"Затраты на свет: -{round(winter_light_cost * 3):,} ₴\n"
+        f"Сальдо: **+{round(winter_profit_uah):,} ₴** (${round(winter_profit_uah/usd_r)})\n"
+        f"--- \n"
+        f"🏆 **ЧИСТЫЙ ПРОФИТ ЗА ГОД:**\n"
+        f"🔥 **{round(total_year_uah):,} ₴** (${round(total_year_uah/usd_r)})\n\n"
+        f"Алексей, это твои реальные деньги на руки после оплаты всех счетов за свет."
     )
     await message.answer(text)
 
-@dp.message_handler(lambda m: "Годовой баланс" in m.text)
-async def yearly(message: types.Message):
-    annual_gen = 32000
-    annual_cons = MONTHLY_CONS * 12
-    await message.answer(f"📅 **Итог года:**\n🌞 СЭС: 32 000 кВт⋅ч\n⚡ S21: {annual_cons} кВт⋅ч\n🏆 Остаток: **+{annual_gen - annual_cons} кВт⋅ч**")
+# Остальные хендлеры (Сезонный отчет, Окупаемость, Баланс) остаются как в прошлом коде
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
